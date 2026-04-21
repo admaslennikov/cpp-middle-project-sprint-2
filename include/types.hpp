@@ -1,18 +1,26 @@
 #pragma once
 
-namespace stdx::details {
+#include <string>
+#include <tuple>
 
+namespace stdx::details
+{
 // Класс для хранения ошибки неуспешного сканирования
-
-struct scan_error {
+struct scan_error
+{
     std::string message;
 };
 
 // Шаблонный класс для хранения результатов успешного сканирования
-
 template <typename... Ts>
-struct scan_result {
-    // здесь ваш код
-};
+struct scan_result
+{
+    scan_result() = default;
 
-} // namespace stdx::details
+    explicit scan_result(std::tuple<Ts...> values) : m_values(std::move(values)) {}
+    auto values() const -> std::tuple<Ts...> { return m_values; }
+
+private:
+    std::tuple<Ts...> m_values;
+};
+}  // namespace stdx::details
