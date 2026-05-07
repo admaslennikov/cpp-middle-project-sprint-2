@@ -1,5 +1,6 @@
 Language: Cpp
 BasedOnStyle: LLVM
+BreakBeforeBraces: Allman
 ColumnLimit: 120
 CompactNamespaces: true
 AccessModifierOffset: -4
@@ -12,3 +13,6 @@ TabWidth: 4
 UseTab: Never
 Cpp11BracedListStyle: true
 AlwaysBreakTemplateDeclarations: true
+BinPackArguments: false
+BinPackParameters: false
+
