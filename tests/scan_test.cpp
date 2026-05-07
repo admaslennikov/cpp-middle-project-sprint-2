@@ -281,7 +281,7 @@ TEST(ParseValueWithFormatErrorTests, FailsOnSignedOutOfRange)
     auto result = stdx::details::parse_value_with_format<std::int8_t>("1000", "%d");
 
     AssertFailure(result);
-    AssertErrorContains(result.error().message, "value is out of range");
+    AssertErrorContains(result.error().message, "result_out_of_range");
     AssertErrorContains(result.error().message, "1000");
     AssertErrorContains(result.error().message, "int8_t");
 }
@@ -291,7 +291,7 @@ TEST(ParseValueWithFormatErrorTests, FailsOnUnsignedOutOfRange)
     auto result = stdx::details::parse_value_with_format<std::uint8_t>("1000", "%u");
 
     AssertFailure(result);
-    AssertErrorContains(result.error().message, "value is out of range");
+    AssertErrorContains(result.error().message, "result_out_of_range");
     AssertErrorContains(result.error().message, "1000");
     AssertErrorContains(result.error().message, "uint8_t");
 }
@@ -483,7 +483,7 @@ TEST(ScanErrorTests, OutOfRangeError)
     auto result = stdx::scan<std::uint8_t>("1000", "{%u}");
 
     AssertFailure(result);
-    AssertErrorContains(result.error().message, "value is out of range");
+    AssertErrorContains(result.error().message, "result_out_of_range");
     AssertErrorContains(result.error().message, "uint8_t");
 }
 
@@ -493,4 +493,12 @@ TEST(ScanErrorTests, ParseSourcesError)
 
     AssertFailure(result);
     EXPECT_EQ(result.error().message, "Parsing error: Placeholder count does not match number of template arguments");
+}
+
+TEST(ScanErrorTests, ReferenceTypeError)
+{
+    auto result = stdx::scan<std::int32_t &>("id=42", "id={%d}");
+
+    AssertFailure(result);
+    EXPECT_EQ(result.error().message, "Scan error: unsupported type in template arguments");
 }

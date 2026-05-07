@@ -6,6 +6,7 @@
 namespace stdx
 {
 template <typename... Ts, std::size_t... Is>
+[[nodiscard]]
 std::expected<details::scan_result<Ts...>, details::scan_error>
 scan_impl(const std::vector<std::string_view> &format_parts,
           const std::vector<std::string_view> &input_parts,
@@ -39,16 +40,24 @@ scan_impl(const std::vector<std::string_view> &format_parts,
 }
 
 template <typename... Ts>
+[[nodiscard]]
 std::expected<details::scan_result<Ts...>, details::scan_error> scan(std::string_view input, std::string_view format)
 {
-    auto parsed_sources = details::parse_sources<Ts...>(input, format);
+    if constexpr (!(details::scan_supported_type<Ts> && ...))
+    {
+        return std::unexpected(details::scan_error{"Scan error: unsupported type in template arguments"});
+    }
+    else
+    {
+        auto parsed_sources = details::parse_sources<Ts...>(input, format);
 
-    if (!parsed_sources)
-        return std::unexpected(parsed_sources.error());
+        if (!parsed_sources)
+            return std::unexpected(parsed_sources.error());
 
-    const auto &[format_parts, input_parts] = parsed_sources.value();
+        const auto &[format_parts, input_parts] = parsed_sources.value();
 
-    return scan_impl<Ts...>(format_parts, input_parts, std::index_sequence_for<Ts...>{});
+        return scan_impl<Ts...>(format_parts, input_parts, std::index_sequence_for<Ts...>{});
+    }
 }
 
 }  // namespace stdx

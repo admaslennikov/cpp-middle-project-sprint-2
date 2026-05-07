@@ -4,7 +4,6 @@
 #include <concepts>
 #include <cstdint>
 #include <expected>
-#include <limits>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -13,6 +12,11 @@
 #include <vector>
 
 #include "types.hpp"
+
+namespace
+{
+static const int BASE_ERROR_MESSAGE_SIZE = 128;
+}
 
 namespace stdx::details
 {
@@ -102,13 +106,14 @@ template <typename T>
 concept scan_supported_type = traits::is_supported_type_v<T>;
 
 template <typename T>
-concept signed_integer_scan_type = scan_supported_type<T> && traits::is_signed_integer_v<T>;
-
-template <typename T>
-concept unsigned_integer_scan_type = scan_supported_type<T> && traits::is_unsigned_integer_v<T>;
+concept integer_scan_type =
+    scan_supported_type<T> && (traits::is_signed_integer_v<T> || traits::is_unsigned_integer_v<T>);
 
 template <typename T>
 concept floating_scan_type = scan_supported_type<T> && traits::is_floating_point_v<T>;
+
+template <typename T>
+concept arithmetic_scan_type = integer_scan_type<T> || floating_scan_type<T>;
 
 template <typename T>
 concept string_scan_type = scan_supported_type<T> && traits::is_string_like_v<T>;
@@ -172,6 +177,7 @@ inline std::string errc_to_string(std::errc ec)
 }
 
 template <typename T>
+[[nodiscard]]
 std::expected<T, scan_error> make_error(std::string message)
 {
     std::string full;
@@ -187,7 +193,7 @@ template <typename T>
 std::string make_context_prefix(std::string_view input)
 {
     std::string result;
-    result.reserve(64 + input.size());
+    result.reserve(BASE_ERROR_MESSAGE_SIZE + input.size());
 
     result += "failed to parse value '";
     result += input;
@@ -219,75 +225,9 @@ std::string make_trailing_chars_error_message(std::string_view input)
     return msg;
 }
 
-template <typename T>
-std::string make_range_error_message(std::string_view input, std::string_view lower, std::string_view upper)
-{
-    std::string msg = make_context_prefix<T>(input);
-
-    msg += "value is out of range [";
-    msg += lower;
-    msg += ", ";
-    msg += upper;
-    msg += "]";
-
-    return msg;
-}
-
-template <signed_integer_scan_type T>
-std::expected<T, scan_error> parse_signed_integral(std::string_view input)
-{
-    std::int64_t parsed{};
-    const char *first = input.data();
-    const char *last = input.data() + input.size();
-
-    const auto [ptr, ec] = std::from_chars(first, last, parsed);
-
-    if (ec != std::errc{})
-        return make_error<T>(make_from_chars_error_message<T>(input, ec));
-
-    if (ptr != last)
-        return make_error<T>(make_trailing_chars_error_message<T>(input));
-
-    constexpr auto min_v = std::numeric_limits<base_t<T>>::min();
-    constexpr auto max_v = std::numeric_limits<base_t<T>>::max();
-
-    if (parsed < static_cast<std::int64_t>(min_v) || parsed > static_cast<std::int64_t>(max_v))
-    {
-        return make_error<T>(make_range_error_message<T>(
-            input, std::to_string(static_cast<long long>(min_v)), std::to_string(static_cast<long long>(max_v))));
-    }
-
-    return static_cast<base_t<T>>(parsed);
-}
-
-template <unsigned_integer_scan_type T>
-std::expected<T, scan_error> parse_unsigned_integral(std::string_view input)
-{
-    std::uint64_t parsed{};
-    const char *first = input.data();
-    const char *last = input.data() + input.size();
-
-    const auto [ptr, ec] = std::from_chars(first, last, parsed);
-
-    if (ec != std::errc{})
-        return make_error<T>(make_from_chars_error_message<T>(input, ec));
-
-    if (ptr != last)
-        return make_error<T>(make_trailing_chars_error_message<T>(input));
-
-    constexpr auto max_v = std::numeric_limits<base_t<T>>::max();
-
-    if (parsed > static_cast<std::uint64_t>(max_v))
-    {
-        return make_error<T>(
-            make_range_error_message<T>(input, "0", std::to_string(static_cast<unsigned long long>(max_v))));
-    }
-
-    return static_cast<base_t<T>>(parsed);
-}
-
-template <floating_scan_type T>
-std::expected<T, scan_error> parse_floating(std::string_view input)
+template <arithmetic_scan_type T>
+[[nodiscard]]
+std::expected<T, scan_error> parse_arithmetic(std::string_view input)
 {
     base_t<T> parsed{};
 
@@ -305,7 +245,22 @@ std::expected<T, scan_error> parse_floating(std::string_view input)
     return parsed;
 }
 
+template <integer_scan_type T>
+[[nodiscard]]
+std::expected<T, scan_error> parse_integral(std::string_view input)
+{
+    return parse_arithmetic<T>(input);
+}
+
+template <floating_scan_type T>
+[[nodiscard]]
+std::expected<T, scan_error> parse_floating(std::string_view input)
+{
+    return parse_arithmetic<T>(input);
+}
+
 template <string_scan_type T>
+[[nodiscard]]
 std::expected<T, scan_error> parse_string_like(std::string_view input)
 {
     if constexpr (std::same_as<base_t<T>, std::string_view>)
@@ -333,7 +288,7 @@ template <scan_supported_type T>
 std::string make_format_mismatch_message(std::string_view input, std::string_view fmt)
 {
     std::string msg;
-    msg.reserve(128 + input.size() + fmt.size());
+    msg.reserve(BASE_ERROR_MESSAGE_SIZE + input.size() + fmt.size());
 
     msg += "conversion specifier mismatch for value '";
     msg += input;
@@ -349,25 +304,22 @@ std::string make_format_mismatch_message(std::string_view input, std::string_vie
 }
 
 // Семейство функций parse_value
-template <signed_integer_scan_type T>
+template <integer_scan_type T>
+[[nodiscard]]
 std::expected<T, scan_error> parse_value(std::string_view input)
 {
-    return parse_signed_integral<T>(input);
-}
-
-template <unsigned_integer_scan_type T>
-std::expected<T, scan_error> parse_value(std::string_view input)
-{
-    return parse_unsigned_integral<T>(input);
+    return parse_integral<T>(input);
 }
 
 template <floating_scan_type T>
+[[nodiscard]]
 std::expected<T, scan_error> parse_value(std::string_view input)
 {
     return parse_floating<T>(input);
 }
 
 template <string_scan_type T>
+[[nodiscard]]
 std::expected<T, scan_error> parse_value(std::string_view input)
 {
     return parse_string_like<T>(input);
@@ -375,6 +327,7 @@ std::expected<T, scan_error> parse_value(std::string_view input)
 
 // Функция для парсинга значения с учетом спецификатора формата
 template <scan_supported_type T>
+[[nodiscard]]
 std::expected<T, scan_error> parse_value_with_format(std::string_view input, std::string_view fmt)
 {
     if (!fmt.empty())
@@ -396,6 +349,7 @@ std::expected<T, scan_error> parse_value_with_format(std::string_view input, std
 
 // Функция для проверки корректности входных данных и выделения из обеих строк интересующих данных для парсинга
 template <typename... Ts>
+[[nodiscard]]
 std::expected<std::pair<std::vector<std::string_view>, std::vector<std::string_view>>, scan_error>
 parse_sources(std::string_view input, std::string_view format)
 {

@@ -18,7 +18,12 @@ struct scan_result
     scan_result() = default;
 
     explicit scan_result(std::tuple<Ts...> values) : m_values(std::move(values)) {}
-    auto values() const -> std::tuple<Ts...> { return m_values; }
+
+    [[nodiscard]]
+    auto values() const -> std::tuple<Ts...>
+    {
+        return m_values;
+    }
 
 private:
     std::tuple<Ts...> m_values;
